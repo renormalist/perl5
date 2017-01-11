@@ -873,10 +873,12 @@ S_argvout_free(pTHX_ SV *io, MAGIC *mg) {
 
     /* note this can be entered once the file has been
        successfully deleted too */
-    assert(mg->mg_obj && SvTYPE(mg->mg_obj) == SVt_PVAV);
     assert(IoTYPE(io) != IoTYPE_PIPE);
 
-    if (IoIFP(io)) {
+    /* mg_obj can be NULL if a thread is created with the handle open, in which
+     case we leave any clean up to the parent thread */
+    if (mg->mg_obj && IoIFP(io)) {
+        SV **pid_psv;
 #ifdef ARGV_USE_ATFUNCTIONS
         SV **dir_psv;
         DIR *dir;
@@ -903,6 +905,17 @@ S_argvout_free(pTHX_ SV *io, MAGIC *mg) {
     return 0;
 }
 
+static int
+S_argvout_dup(pTHX_ MAGIC *mg, CLONE_PARAMS *param) {
+    PERL_UNUSED_ARG(param);
+
+    /* ideally we could just remove the magic from the SV but we don't get the SV here */
+    SvREFCNT_dec(mg->mg_obj);
+    mg->mg_obj = NULL;
+
+    return 0;
+}
+
 /* Magic of this type has an AV containing the following:
    0: name of the backup file (if any)
    1: name of the temp output file
@@ -921,8 +934,8 @@ static const MGVTBL argvout_vtbl =
         NULL, /* svt_clear */
         S_argvout_free, /* svt_free */
         NULL, /* svt_copy */
-        NULL, /* svt_dup */
-        NULL  /* svt_local */
+        S_argvout_dup,  /* svt_dup */
+        NULL /* svt_local */
     };
 
 PerlIO *
@@ -992,6 +1005,7 @@ Perl_nextargv(pTHX_ GV *gv, bool nomagicopen)
                 Gid_t filegid;
                 AV *magic_av = NULL;
                 SV *temp_name_sv = NULL;
+                MAGIC *mg;
 
 		TAINT_PROPER("inplace open");
 		if (oldlen == 1 && *PL_oldname == '-') {
@@ -1072,7 +1086,8 @@ Perl_nextargv(pTHX_ GV *gv, bool nomagicopen)
                 av_store(magic_av, ARGVMG_ORIG_DIRP, newSViv(PTR2IV(curdir)));
 #endif
 		setdefout(PL_argvoutgv);
-                sv_magicext((SV*)GvIOp(PL_argvoutgv), (SV*)magic_av, PERL_MAGIC_uvar, &argvout_vtbl, NULL, 0);
+                mg = sv_magicext((SV*)GvIOp(PL_argvoutgv), (SV*)magic_av, PERL_MAGIC_uvar, &argvout_vtbl, NULL, 0);
+                mg->mg_flags |= MGf_DUP;
                 SvREFCNT_dec(magic_av);
 		PL_lastfd = PerlIO_fileno(IoIFP(GvIOp(PL_argvoutgv)));
                 if (PL_lastfd >= 0) {
