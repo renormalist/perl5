@@ -5716,6 +5716,7 @@ PP(pp_split)
     STRLEN len;
     const char *s = SvPV_const(sv, len);
     const bool do_utf8 = DO_UTF8(sv);
+    const bool in_uni_8_bit = IN_UNI_8_BIT;
     const char *strend = s + len;
     PMOP *pm = cPMOPx(PL_op);
     REGEXP *rx;
@@ -5802,6 +5803,10 @@ PP(pp_split)
 	    while (s < strend && isSPACE_LC(*s))
 		s++;
 	}
+        else if (in_uni_8_bit) {
+            while (s < strend && isSPACE_L1(*s))
+                s++;
+        }
 	else {
 	    while (s < strend && isSPACE(*s))
 		s++;
@@ -5833,6 +5838,10 @@ PP(pp_split)
             {
 	        while (m < strend && !isSPACE_LC(*m))
 		    ++m;
+            }
+            else if (in_uni_8_bit) {
+                while (m < strend && !isSPACE_L1(*m))
+                    ++m;
             } else {
                 while (m < strend && !isSPACE(*m))
                     ++m;
@@ -5867,6 +5876,10 @@ PP(pp_split)
             {
 	        while (s < strend && isSPACE_LC(*s))
 		    ++s;
+            }
+            else if (in_uni_8_bit) {
+                while (s < strend && isSPACE_L1(*s))
+                    ++s;
             } else {
                 while (s < strend && isSPACE(*s))
                     ++s;
