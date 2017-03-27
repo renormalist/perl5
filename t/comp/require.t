@@ -182,9 +182,9 @@ my $x = "ok $i - bleah.do\n";
 write_file("bleah.do", <<EOT);
 \$x = "not ok $i - bleah.do\\n";
 EOT
-do "bleah.do" or die $@;
+do "./bleah.do" or die $@;
 dofile();
-sub dofile { do "bleah.do" or die $@; };
+sub dofile { do "./bleah.do" or die $@; };
 print $x;
 
 # Test that scalar context is forced for require
