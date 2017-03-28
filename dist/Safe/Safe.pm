@@ -3,7 +3,7 @@ package Safe;
 use 5.003_11;
 use Scalar::Util qw(reftype refaddr);
 
-$Safe::VERSION = "2.39";
+$Safe::VERSION = "2.40";
 
 # *** Don't declare any lexicals above this point ***
 #
@@ -512,7 +512,7 @@ assignment of arguments to @_ on subroutine entry.
 
 Each compartment has an associated "operator mask". Recall that
 perl code is compiled into an internal format before execution.
-Evaluating perl code (e.g. via "eval" or "do 'file'") causes
+Evaluating perl code (e.g. via "eval" or "do '/path/to/file'") causes
 the code to be compiled into an internal format and then,
 provided there was no error in the compilation, executed.
 Code evaluated in a compartment compiles subject to the

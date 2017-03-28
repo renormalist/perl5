@@ -121,7 +121,7 @@ is_deeply \@bhkav,
 delete @INC{qw{t/Null.pm t/Block.pm}};
 
 t::BHK->import;
-    do "t/Null.pm";
+    do "./t/Null.pm";
 t::BHK->unimport;
 
 is_deeply \@bhkav,
@@ -133,7 +133,7 @@ is_deeply \@bhkav,
     "do file (null)";
 
 t::BHK->import;
-    do "t/Block.pm";
+    do "./t/Block.pm";
 t::BHK->unimport;
 
 is_deeply \@bhkav,

@@ -83,7 +83,7 @@ individual test.
 
 --benchfile=I<foo>
 
-The path of the file which contains the benchmarks (F<t/perf/benchmarks>
+The path of the file which contains the benchmarks (F<./t/perf/benchmarks>
 by default).
 
 =item *
@@ -314,7 +314,7 @@ usage: $0 [options] -- perl[=label] ...
   --action=foo       What action to perform [default: grind].
   --average          Only display average, not individual test results.
   --benchfile=foo    File containing the benchmarks;
-                       [default: t/perf/benchmarks].
+                       [default: ./t/perf/benchmarks].
   --bisect=f,min,max run a single test against one perl and exit with a
                        zero status if the named field is in the specified
                        range; exit 1 otherwise.
@@ -356,7 +356,7 @@ EOF
 my %OPTS = (
     action    => 'grind',
     average   => 0,
-    benchfile => 't/perf/benchmarks',
+    benchfile => './t/perf/benchmarks',
     bisect    => undef,
     compact   => undef,
     debug     => 0,
