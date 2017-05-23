@@ -3175,6 +3175,7 @@ PerlIOStdio_invalidate_fileno(pTHX_ FILE *f)
      * PerlIO_set_fileno() support from Configure
      */
 #  if defined(HAS_FDCLOSE)
+    fprintf(stderr, "BOOM! BOOM! BOOM!\n");
     return fdclose(f, NULL) == 0 ? 1 : 0;
 #  elif defined(__UCLIBC__)
     /* uClibc must come before glibc because it defines __GLIBC__ as well. */
@@ -3251,6 +3252,11 @@ IV
 PerlIOStdio_close(pTHX_ PerlIO *f)
 {
     FILE * const stdio = PerlIOSelf(f, PerlIOStdio)->stdio;
+    /* The following line demonstrates that the test suite exercises
+     * PerlIOStdio_close().  In the process test failures are generated in
+     * t/io/error.t.
+     */
+    /* fprintf(stderr, "ROOM! ROOM! ROOM!\n"); */
     if (!stdio) {
 	errno = EBADF;
 	return -1;
@@ -3271,6 +3277,8 @@ PerlIOStdio_close(pTHX_ PerlIO *f)
 	 */
     	int optval;
     	Sock_size_t optlen = sizeof(int);
+        /* Line below is not exercised by test suite. */
+        fprintf(stderr, "LOOM! LOOM! LOOM!\n");
 	if (getsockopt(fd, SOL_SOCKET, SO_TYPE, (void *) &optval, &optlen) == 0)
 	    invalidate = 1;
 #endif
@@ -3317,6 +3325,8 @@ PerlIOStdio_close(pTHX_ PerlIO *f)
 	    */
 	    result = PerlIO_flush(f);
 	    SAVE_ERRNO;
+            /* Line below is not exercised by test suite. */
+            fprintf(stderr, "DOOM! DOOM! DOOM!\n");
 	    invalidate = PerlIOStdio_invalidate_fileno(aTHX_ stdio);
 	    if (!invalidate) {
 		dupfd = PerlLIO_dup(fd);
