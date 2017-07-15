@@ -448,7 +448,7 @@ perl_construct(pTHXx)
     PL_WB_invlist = _new_invlist_C_array(_Perl_WB_invlist);
     PL_LB_invlist = _new_invlist_C_array(_Perl_LB_invlist);
     PL_Assigned_invlist = _new_invlist_C_array(Assigned_invlist);
-#ifdef USE_THREAD_SAFE_LOCALE
+#if defined(LC_ALL_MASK) && defined(HAS_NEWLOCALE)
     PL_C_locale_obj = newlocale(LC_ALL_MASK, "C", NULL);
 #endif
 

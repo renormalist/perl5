@@ -5899,7 +5899,10 @@ typedef struct am_table_short AMTS;
 
 #   define LOCALE_INIT   MUTEX_INIT(&PL_locale_mutex)
 
-#   ifdef USE_THREAD_SAFE_LOCALE
+#   if defined(LC_ALL_MASK) && defined(HAS_NEWLOCALE)
+#       if ! defined(HAS_USELOCALE) || ! defined(HAS_FREELOCALE)
+#         error This platform unexpectedly doesnt have both use_locale and freelocale
+#       endif
 #       define LOCALE_TERM                                                  \
                     STMT_START {                                            \
                         MUTEX_DESTROY(&PL_locale_mutex);                    \
