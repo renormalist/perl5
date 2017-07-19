@@ -6058,7 +6058,7 @@ STATIC char*	S_stdize_locale(pTHX_ char* locs);
 #define PERL_ARGS_ASSERT_STDIZE_LOCALE	\
 	assert(locs)
 #  if defined(WIN32)
-STATIC char*	S_my_setlocale(pTHX_ int category, const char* locale);
+STATIC char*	S_win32_setlocale(pTHX_ int category, const char* locale);
 #  endif
 #endif
 #if defined(USE_LOCALE_COLLATE)
