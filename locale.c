@@ -235,8 +235,6 @@ Perl_new_numeric(pTHX_ const char *newnum)
      * need the underlying locale change to it temporarily). */
     set_numeric_standard();
 
-    set_numeric_radix();
-
 #endif /* USE_LOCALE_NUMERIC */
 
 }
