@@ -129,16 +129,17 @@ S_set_numeric_radix(pTHX_ const bool use_locale)
         PL_numeric_radix_sv = NULL;
     }
     else {
-	    if (PL_numeric_radix_sv)
-		sv_setpv(PL_numeric_radix_sv, lc->decimal_point);
-	    else
-		PL_numeric_radix_sv = newSVpv(lc->decimal_point, 0);
-            if (! is_utf8_invariant_string((U8 *) lc->decimal_point, 0)
-                && is_utf8_string((U8 *) lc->decimal_point, 0)
-                && _is_cur_LC_category_utf8(LC_NUMERIC))
-            {
-		SvUTF8_on(PL_numeric_radix_sv);
-            }
+        if (PL_numeric_radix_sv)
+            sv_setpv(PL_numeric_radix_sv, lc->decimal_point);
+        else
+            PL_numeric_radix_sv = newSVpv(lc->decimal_point, 0);
+
+        if ( !  is_utf8_invariant_string((U8 *) lc->decimal_point, 0)
+            &&  is_utf8_string((U8 *) lc->decimal_point, 0)
+            && _is_cur_LC_category_utf8(LC_NUMERIC))
+        {
+            SvUTF8_on(PL_numeric_radix_sv);
+        }
     }
 
 #    ifdef DEBUGGING
