@@ -106,19 +106,29 @@ S_stdize_locale(pTHX_ char *locs)
 #endif
 
 STATIC void
-S_set_numeric_radix(pTHX)
+S_set_numeric_radix(pTHX_ const bool use_locale)
 {
 
 #ifdef USE_LOCALE_NUMERIC
 #  ifdef HAS_LOCALECONV
-    const struct lconv* const lc = localeconv();
 
-    if (lc && lc->decimal_point) {
-	if (lc->decimal_point[0] == '.' && lc->decimal_point[1] == 0) {
-	    SvREFCNT_dec(PL_numeric_radix_sv);
-	    PL_numeric_radix_sv = NULL;
-	}
-	else {
+    /* If 'use_locale' is FALSE, set to use a dot for the radix character.  If
+     * TRUE, use the radix character derived from the current locale */
+
+    const struct lconv* lc;
+
+    /* We only set up the radix SV if we are to use a locale radix, and the
+     * character being used isn't a dot */
+    if (   !  use_locale
+        || ! (lc = localeconv())
+        || !  lc->decimal_point
+        ||   (   lc->decimal_point[0] == '.'
+              && lc->decimal_point[1] == '\0'))
+    {
+        SvREFCNT_dec(PL_numeric_radix_sv);
+        PL_numeric_radix_sv = NULL;
+    }
+    else {
 	    if (PL_numeric_radix_sv)
 		sv_setpv(PL_numeric_radix_sv, lc->decimal_point);
 	    else
@@ -129,10 +139,7 @@ S_set_numeric_radix(pTHX)
             {
 		SvUTF8_on(PL_numeric_radix_sv);
             }
-	}
     }
-    else
-	PL_numeric_radix_sv = NULL;
 
 #    ifdef DEBUGGING
 
@@ -254,7 +261,7 @@ Perl_set_numeric_standard(pTHX)
     setlocale(LC_NUMERIC, "C");
     PL_numeric_standard = TRUE;
     PL_numeric_local = isNAME_C_OR_POSIX(PL_numeric_name);
-    set_numeric_radix();
+    set_numeric_radix(0);
 
 #  ifdef DEBUGGING
 
@@ -283,7 +290,7 @@ Perl_set_numeric_local(pTHX)
     setlocale(LC_NUMERIC, PL_numeric_name);
     PL_numeric_standard = isNAME_C_OR_POSIX(PL_numeric_name);
     PL_numeric_local = TRUE;
-    set_numeric_radix();
+    set_numeric_radix(1);
 
 #  ifdef DEBUGGING
 

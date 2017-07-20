@@ -2717,7 +2717,7 @@ s	|bool	|isa_lookup	|NN HV *stash|NN const char * const name \
 s	|char*	|stdize_locale	|NN char* locs
 s	|void	|new_collate	|NULLOK const char* newcoll
 s	|void	|new_ctype	|NN const char* newctype
-s	|void	|set_numeric_radix
+s	|void	|set_numeric_radix|const bool use_locale
 #ifdef WIN32
 s	|char*	|win32_setlocale|int category|NULLOK const char* locale
 #endif
