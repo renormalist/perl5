@@ -10952,7 +10952,8 @@ Perl_vms_do_aexec(pTHX_ SV *really,SV **mark,SV **sp)
   bool exec_sts;
   char * cmd;
 
-  if (sp > mark) {
+  assert(sp >= mark);
+  {
     if (vfork_called) {           /* this follows a vfork - act Unixish */
       vfork_called--;
       if (vfork_called < 0) {
