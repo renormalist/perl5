@@ -5894,7 +5894,7 @@ typedef struct am_table_short AMTS;
      * enough to have the Posix 2008 locale functions has LC_ALL.  The test
      * above makes sure that assumption is valid */
 
-#    define USE_THREAD_SAFE_LOCALE
+#    define USE_POSIX_2008_LOCALE
 #  endif
 
 #   define LOCALE_INIT   MUTEX_INIT(&PL_locale_mutex)

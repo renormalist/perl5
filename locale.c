@@ -2927,7 +2927,7 @@ Perl_my_strerror(pTHX_ const int errnum)
     errstr = savepv(errstr);
 
 #  else /* Doesn't have strerror_l(). */
-#    ifdef USE_THREAD_SAFE_LOCALE
+#    ifdef USE_POSIX_2008_LOCALE
 
     locale_t save_locale = NULL;
 
@@ -2949,7 +2949,7 @@ Perl_my_strerror(pTHX_ const int errnum)
     if (! within_locale_scope) {
         errno = 0;
 
-#    ifdef USE_THREAD_SAFE_LOCALE /* Use the thread-safe locale functions */
+#    ifdef USE_POSIX_2008_LOCALE /* Use the thread-safe locale functions */
 
         DEBUG_Lv(PerlIO_printf(Perl_debug_log,
                                     "Not within locale scope, about to call"
@@ -3003,7 +3003,7 @@ Perl_my_strerror(pTHX_ const int errnum)
     if (! within_locale_scope) {
         errno = 0;
 
-#    ifdef USE_THREAD_SAFE_LOCALE
+#    ifdef USE_POSIX_2008_LOCALE
 
         DEBUG_Lv(PerlIO_printf(Perl_debug_log,
                     "%s: %d: not within locale scope, restoring the locale\n",
