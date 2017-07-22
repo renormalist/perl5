@@ -6049,6 +6049,7 @@ PERL_CALLCONV SV*	Perl_sv_dup_inc(pTHX_ const SV *const sstr, CLONE_PARAMS *cons
 PERL_CALLCONV bool	Perl__is_cur_LC_category_utf8(pTHX_ int category);
 #endif
 #if defined(USE_LOCALE) && defined(PERL_IN_LOCALE_C)
+STATIC char*	S_emulate_setlocale(pTHX_ const int category, const char* locale, int mask, const bool is_mask_valid);
 STATIC void	S_new_collate(pTHX_ const char* newcoll);
 STATIC void	S_new_ctype(pTHX_ const char* newctype);
 #define PERL_ARGS_ASSERT_NEW_CTYPE	\

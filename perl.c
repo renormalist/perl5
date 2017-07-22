@@ -448,8 +448,12 @@ perl_construct(pTHXx)
     PL_WB_invlist = _new_invlist_C_array(_Perl_WB_invlist);
     PL_LB_invlist = _new_invlist_C_array(_Perl_LB_invlist);
     PL_Assigned_invlist = _new_invlist_C_array(Assigned_invlist);
-#if defined(LC_ALL_MASK) && defined(HAS_NEWLOCALE)
+#if 0 && defined(LC_ALL_MASK) && defined(HAS_NEWLOCALE)
+    errno = 0;
     PL_C_locale_obj = newlocale(LC_ALL_MASK, "C", NULL);
+    if (! PL_C_locale_obj) {
+        const int save_errno = errno;
+    }
 #endif
 
     ENTER;

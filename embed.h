@@ -1879,6 +1879,7 @@
 #define padnamelist_dup(a,b)	Perl_padnamelist_dup(aTHX_ a,b)
 #  endif
 #  if defined(USE_LOCALE) && defined(PERL_IN_LOCALE_C)
+#define emulate_setlocale(a,b,c,d)	S_emulate_setlocale(aTHX_ a,b,c,d)
 #define new_collate(a)		S_new_collate(aTHX_ a)
 #define new_ctype(a)		S_new_ctype(aTHX_ a)
 #define set_numeric_radix(a)	S_set_numeric_radix(aTHX_ a)

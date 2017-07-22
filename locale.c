@@ -1,3 +1,25 @@
+/*
+ * We assume, or make sure in our def or maybe just LC_ALL that all the categories we care about are available on sysmtems that are thread safe.
+ *
+ *
+ * have to deale with localeconv, what about strtod?
+ *
+ * For non-threaded or early  Posix systems,
+ *  Mutex the setlocale and savepv, otherwise the same as now.
+ *
+ * For 2008 Posix systems,
+ *
+    The strcoll_l(), strerror_l(), and strxfrm_l() are the only _l ones, and strerror_l is already used; the others aren't useful
+
+ *  TonyC, concerning  thread-safe locale handling.  I can see how to emulate this for pure perl programs.
+	We have a per-thread variable that contains its locale.  Then we call setlocale()
+	to that locale just before every operation that is affected by locale, protected by a mutex until the
+	operation is done.   There aren't that many.
+	We can have a perl_setlocale() whose return has been  savepv()'d, so must be freed by the caller.
+	But, I don't see how to do this for the general case in XS code.  Perhaps that's where we furnish macros
+	that an XS writer must use around any functions that are locale-sensitive.
+ *
+ */
 /*    locale.c
  *
  *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001,
@@ -105,14 +127,566 @@ S_stdize_locale(pTHX_ char *locs)
 
 #endif
 
-/* Just placeholders for now */
-#ifdef WIN32
-#  define do_setlocale_c(category, locale) win32_setlocale(category, locale)
-#  define do_setlocale_r(category, locale) win32_setlocale(category, locale)
-#else 
-#  define do_setlocale_c(category, locale) setlocale(category, locale)
-#  define do_setlocale_r(category, locale) setlocale(category, locale)
+#ifdef USE_POSIX_2008_LOCALE
+/*#  define USE_THREAD_SAFE_LOCALE*/
 #endif
+
+#ifdef USE_POSIX_2008_LOCALE
+
+#ifdef USE_THREAD_SAFE_LOCALE
+
+#   define DECLARATION_FOR_SAVE_AND_SWITCH_LOCALE                           \
+                                            locale_t LoCaLe_ObJeCt
+
+#   define SAVE_AND_SWITCH_LOCALE(category, old_locale, new_locale)         \
+        STMT_START {                                                        \
+            LoCaLe_ObJeCt = newlocale(category, new_locale, NULL);          \
+            if (! LoCaLe_ObJeCt) Perl_croak(aTHX_                           \
+                               "panic: newlocale failed; errno=%d", errno); \
+            if (! uselocale(LoCaLe_ObJeCt)) Perl_croak(aTHX_                \
+                               "panic: uselocale failed; errno=%d", errno); \
+        } STMT_END
+
+#   define RESTORE_LOCALE                                                   \
+        STMT_START {                                                        \
+            if (! uselocale(LC_GLOBAL_LOCALE)) Perl_croak(aTHX_             \
+                               "panic: uselocale failed; errno=%d", errno); \
+            freelocale(LoCaLe_ObJeCt);                                      \
+        } STMT_END
+
+#else
+#   define DECLARATION_FOR_SAVE_AND_SWITCH_LOCALE                           \
+        char * SaVe_LoCaLe; int CaTeGoRy
+
+#   define SAVE_AND_SWITCH_LOCALE(category, old_locale, new_locale)         \
+        STMT_START {                                                        \
+            SaVe_LoCaLe = savepv(old_locale);                               \
+            CaTeGoRy    = category;                                         \
+            if (! setlocale(category, new_locale)) Perl_croak(aTHX_         \
+  "panic: setlocale(%d, %s) failed; errno=%d", category, new_locale, errno); \
+        } STMT_END
+
+#   define RESTORE_LOCALE                                                   \
+        STMT_START {                                                        \
+            if (! setlocale(CaTeGoRy, SaVe_LoCaLe)) Perl_croak(aTHX_        \
+ "panic: setlocale(%d, %s) failed; errno=%d", CaTeGoRy, SaVe_LoCaLe, errno); \
+            Safefree(SaVe_LoCaLe);                                          \
+        } STMT_END
+
+#endif
+
+
+#ifndef USE_POSIX_2008_LOCALE
+
+#  ifdef WIN32
+#   define do_setlocale_c(cat, locale) win32_setlocale(cat, locale)
+#  else
+#   define do_setlocale_c(cat, locale) setlocale(cat, locale)
+#  endif
+
+#  define do_setlocale_r(cat, locale) do_setlocale_c(cat, locale)
+
+#else   /* Below uses POSIX 2008 */
+
+#  ifdef WIN32
+#    error Windows with POSIX 2008 not supported
+#  endif
+
+#  define do_setlocale_c(cat, locale) emulate_setlocale(cat, locale, cat ## _MASK, TRUE)
+#  define do_setlocale_r(cat, locale) emulate_setlocale(cat, locale, 0, FALSE)
+
+
+const int category_mask[] = { LC_ALL,      LC_ALL_MASK,
+                        LC_NUMERIC,  LC_NUMERIC_MASK,
+                        LC_CTYPE,    LC_CTYPE_MASK,
+                        LC_COLLATE,  LC_COLLATE_MASK,
+                        LC_TIME,     LC_TIME_MASK,
+#  if defined(LC_MESSAGES) && defined(LC_MESSAGES_MASK)
+                        LC_MESSAGES, LC_MESSAGES_MASK,
+#  endif
+#  if defined(LC_MONETARY) && defined(LC_MONETARY_MASK)
+                        LC_MONETARY, LC_MONETARY_MASK,
+#  endif
+#  if defined(LC_ADDRESS) && defined(LC_ADDRESS_MASK)
+                        LC_ADDRESS, LC_ADDRESS_MASK,
+#  endif
+#  if defined(LC_IDENTIFICATION) && defined(LC_IDENTIFICATION_MASK)
+                        LC_IDENTIFICATION, LC_IDENTIFICATION_MASK,
+#  endif
+#  if defined(LC_MEASUREMENT) && defined(LC_MEASUREMENT_MASK)
+                        LC_MEASUREMENT, LC_MEASUREMENT_MASK,
+#  endif
+#  if defined(LC_PAPER) && defined(LC_PAPER_MASK)
+                        LC_PAPER, LC_PAPER_MASK,
+#  endif
+#  if defined(LC_TELEPHONE) && defined(LC_TELEPHONE_MASK)
+                        LC_TELEPHONE, LC_TELEPHONE_MASK,
+#  endif
+                        -1  /* Just so we don't have to worry about commas in
+                               the definitions above */
+                    };
+
+#  ifndef HAS_QUERYLOCALE
+
+const int categories[] = { LC_ALL,
+                     LC_NUMERIC,
+                     LC_CTYPE,
+                     LC_COLLATE,
+                     LC_TIME,
+
+#    ifdef LC_MESSAGES
+
+                     LC_MESSAGES,
+
+#    endif
+#    ifdef LC_MONETARY
+
+                     LC_MONETARY,
+
+#    endif
+#    ifdef LC_ADDRESS
+
+                     LC_ADDRESS,
+
+#    endif
+#    ifdef LC_IDENTIFICATION
+                     LC_IDENTIFICATION,
+#    endif
+#    ifdef LC_MEASUREMENT
+                     LC_MEASUREMENT,
+#    endif
+#    ifdef LC_PAPER
+                     LC_PAPER,
+#    endif
+#    ifdef LC_TELEPHONE
+                     LC_TELEPHONE,
+#    endif
+                     -1  /* Just so we don't have to worry about commas in the
+                            definitions above */
+                };
+
+const char * category_names[] = { "LC_ALL",
+                                  "LC_NUMERIC",
+                                  "LC_CTYPE",
+                                  "LC_COLLATE",
+                                  "LC_TIME",
+#    ifdef LC_MESSAGES
+                                  "LC_MESSAGES",
+#    endif
+#    ifdef LC_MONETARY
+                                  "LC_MONETARY",
+#    endif
+#    ifdef LC_ADDRESS
+                                  "LC_ADDRESS",
+#    endif
+#    ifdef LC_IDENTIFICATION
+                                  "LC_IDENTIFICATION",
+#    endif
+#    ifdef LC_MEASUREMENT
+                                  "LC_MEASUREMENT",
+#    endif
+#    ifdef LC_PAPER
+                                  "LC_PAPER",
+#    endif
+#    ifdef LC_TELEPHONE
+                                  "LC_TELEPHONE",
+#    endif
+                                  /* Just so we don't have to worry about
+                                   * commas in the definitions above */
+                                  NULL
+                            };
+
+#  endif    /* HAS_QUERYLOCALE */
+
+STATIC char *
+S_emulate_setlocale(pTHX_
+                    const int category,
+                    const char * locale,
+                    int mask,
+                    const bool is_mask_valid
+                   )
+{
+    /* This function effectively performs a setlocale() on just the current
+     * thread; thus it is thread-safe.  It does this by using the POSIX 2008
+     * locale functions to emulate the behavior of setlocale().  The return
+     * points to memory that can be overwritten by other system calls, so needs
+     * to be copied immediately if you need to retain it.  In regular
+     * setlocale() calls, it requires another setlocale to overwrite, but this
+     * function may overwrite with o XXX
+     *
+     * This function takes the same parameters 'category' and 'locale' that the
+     * regular setlocale() function does, but it also takes two additional
+     * ones.  This is because the 2008 functions don't use a category; instead
+     * they use a corresponding mask.  Because this function operates in both
+     * worlds, it may need one or the other or both.  This function can
+     * calculate the mask from the input category, but to avoid this
+     * calculation, if the caller knows at compile time what the mask is, it
+     * it can pass it, setting 'is_mask_valid' to TRUE; otherwise the mask
+     * parameter is ignored.
+     *
+     * POSIX 2008, for some sick reason, chose not to provide a method to find
+     * the category name of a locale.  Some vendors have created a
+     * querylocale() function to do just that.  Systems that have this make
+     * this function a lot simpler to implement.  For otherwise, what we have
+     * to do is either know the internals of each platform this is run on, or
+     * keep track of all the locale changes, and store the current name in our
+     * own data structure.  There are gotchas with each of these approaches.
+     * khw thinks the first could turn into a maintenance nightmare, so it is
+     * rejected.  The keeping-track approach gets defeated if a locale change
+     * is done behind our back, say by calling some library that deals with
+     * locales.  But that library is more likely to do a regular setlocale(),
+     * destroying our thread-safe ecosystem anyway.
+     * corresponds to the input 'category'.
+     * If there is no querylocale() available on the system, it needs both the
+     * locale category and its equivalent POSIX 2008 mask.  Rather than #ifdef
+     * this, we let the compiler optimize this static function.  If the caller has found it convenient to 
+
+    * Trying to make it so this could point to static storage which could be overwritten by the next getenv or setlocale, so caller must save it */
+
+    locale_t old_obj;
+    locale_t new_obj;
+
+
+    /* -2 because don't look at the final, -1, element */
+    const Size_t categories_top_index    = C_ARRAY_LENGTH(categories) - 2;
+    const Size_t category_mask_top_index = C_ARRAY_LENGTH(category_mask) - 2;
+    /* XXX maybe should assert are same, use just one.  See what happens if they are off. */
+
+    if (DEBUG_L_TEST || debug_initialization) {
+        PerlIO_printf(Perl_debug_log, "%s:%d: emulate_setlocale input=%d, %s, %d, %d\n", __FILE__, __LINE__, category, locale, mask, is_mask_valid);
+    }
+
+
+    /* If the input mask might be incorrect, calculate the correct one */
+    if (! is_mask_valid) {
+        int i;
+
+        if (DEBUG_L_TEST || debug_initialization) {
+            PerlIO_printf(Perl_debug_log, "%s:%d: converting category %d to mask\n", __FILE__, __LINE__, category);
+        }
+
+        /* The array is structured so that if a category is in element [i], its
+         * equivalent mask is in [i+1] */
+        for (i = 0; i < (int) category_mask_top_index; i+=2) {
+            if (category_mask[i] == category) {
+                mask = category_mask[i + 1];
+                goto found_mask;
+            }
+        }
+
+        /* Here, we don't know about this category, so can't handle it.
+         * Fallback to the early POSIX usages */
+        /* XXX warning */
+
+        return setlocale(category, locale);
+
+      found_mask: ;
+
+        if (DEBUG_L_TEST || debug_initialization) {
+            PerlIO_printf(Perl_debug_log, "%s:%d: mask is %x\n", __FILE__, __LINE__, mask);
+        }
+
+    }
+
+    /* If just querying what the existing locale is ... */
+    if (locale == NULL) {
+        locale_t cur_obj = uselocale((locale_t) 0);
+        if (DEBUG_Lv_TEST || debug_initialization) {
+            PerlIO_printf(Perl_debug_log, "%s:%d: emulate_setlocale querying %p\n", __FILE__, __LINE__, cur_obj);
+        }
+
+        if (cur_obj == LC_GLOBAL_LOCALE) {
+            return setlocale(category, NULL);
+        }
+
+#  ifdef HAS_QUERYLOCALE
+
+        return querylocale(cur_obj);
+
+/*#elif defined(_NL_LOCALE_NAME)
+
+        return nl_langinfo(_NL_LOCALE_NAME(category));
+*/
+#  else
+
+        /* Without querylocale(), we have to use our record-keeping we've
+         *  done. */
+
+        if (category != LC_ALL) {
+            int i;
+
+            /* Look for the category in our list */
+            for (i = 1; i < (int) categories_top_index; i++) {
+                if (category == categories[i]) {
+                    return PL_curlocales[i];
+                }
+            }
+        }
+        else {  /* For LC_ALL */
+            int i;
+            Size_t names_len = 0;
+            char * all_string = '\0';
+
+            /* If we have a valid LC_ALL value, just return it */
+            if (PL_curlocales[0]) {
+                return PL_curlocales[0];
+            }
+
+            /* Otherwise, we need to construct a string of name=value pairs.
+             * We use the gnu syntax. XXX example.  First calculate the needed
+             * size. */
+            for (i = 1; i < (int) categories_top_index; i++) {
+                names_len += strlen(category_names[i])
+                          + 1                       /* '=' */
+                          + strlen(PL_curlocales[i])
+                          + 1;                      /* ';' */
+            }
+            names_len++;    /* Trailing '\0' */
+            Newx(all_string, names_len, char);
+
+            /* Then fill in the string */
+            for (i = 1; i < (int) categories_top_index; i++) {
+                my_strlcat(all_string, category_names[i], names_len);
+                my_strlcat(all_string, "=", names_len);
+                my_strlcat(all_string, PL_curlocales[i], names_len);
+                my_strlcat(all_string, ";", names_len);
+            }
+
+            return all_string;
+        }
+
+        Perl_croak(aTHX_ "panic: Perl doesn't know about category %d\n", category);
+
+#  endif
+
+    }
+
+    /* Switch to a different locale, while getting the current one.  We use the
+     * current one in We aren't supposed to be using old_obj when calling
+     * newlocale() */
+    assert(PL_C_locale_obj);
+    old_obj = uselocale(PL_C_locale_obj);
+    if (DEBUG_Lv_TEST || debug_initialization) {
+        PerlIO_printf(Perl_debug_log, "%s:%d: emulate_setlocale was using %p\n", __FILE__, __LINE__, old_obj);
+    }
+    if (! old_obj) {
+        if (DEBUG_Lv_TEST || debug_initialization) {
+            PerlIO_printf(Perl_debug_log, "%s:%d: emulate_setlocale switching to C failed\n", __FILE__, __LINE__);
+        }
+        return NULL;
+    }
+    if (DEBUG_Lv_TEST || debug_initialization) {
+        PerlIO_printf(Perl_debug_log, "%s:%d: emulate_setlocale now using %p\n", __FILE__, __LINE__, PL_C_locale_obj);
+    }
+    if (old_obj == LC_GLOBAL_LOCALE) {
+        old_obj = NULL;
+    }
+
+    /* Create the new locale (it may actually modify the current one) */
+    new_obj = newlocale(mask, locale, old_obj);
+    if (! new_obj) {
+        if (DEBUG_Lv_TEST || debug_initialization) {
+            PerlIO_printf(Perl_debug_log, "%s:%d: emulate_setlocale creating new object failed\n", __FILE__, __LINE__);
+        }
+        /* restore use */
+        return NULL;
+    }
+
+    if (DEBUG_Lv_TEST || debug_initialization) {
+        PerlIO_printf(Perl_debug_log, "%s:%d: emulate_setlocale created %p\n", __FILE__, __LINE__, new_obj);
+    }
+
+    /* And switch into it */
+    if (! uselocale(new_obj)) {
+        int save_errno = errno;
+
+        if (DEBUG_Lv_TEST || debug_initialization) {
+            PerlIO_printf(Perl_debug_log, "%s:%d: emulate_setlocale switching to new object failed\n", __FILE__, __LINE__);
+        }
+        freelocale(new_obj);
+        errno = save_errno;
+        return NULL;
+    }
+    if (DEBUG_Lv_TEST || debug_initialization) {
+        PerlIO_printf(Perl_debug_log, "%s:%d: emulate_setlocale now using %p\n", __FILE__, __LINE__, new_obj);
+    }
+
+    /* Free up the old locale object */
+    if (old_obj && old_obj != new_obj) {
+        if (DEBUG_Lv_TEST || debug_initialization) {
+            PerlIO_printf(Perl_debug_log, "%s:%d: emulate_setlocale would free %p\n", __FILE__, __LINE__, old_obj);
+        }
+        /*freelocale(old_obj);*/
+    }
+
+    if (strEQ(locale, "")) {    /* Get the values from the environment */
+
+#    ifdef HAS_QUERYLOCALE
+
+        locale = querylocale(new_obj);
+
+/*#elif defined(_NL_LOCALE_NAME)
+
+        locale = nl_langinfo(_NL_LOCALE_NAME(category))
+*/
+#    else
+
+        const char * const lc_all = PerlEnv_getenv("LC_ALL");
+
+        /* Use any "LC_ALL" environment variable, as it overrides everything
+         * else. */
+        if (lc_all) {
+            locale = lc_all;
+        }
+        else {
+            int i;
+
+            /* Otherwise, we need to dig deeper.  Unless overridden, the
+             * default is the LANG environment variable, or "C" */
+
+            char * default_name = savepv(PerlEnv_getenv("LANG"));       /* Need something like savepv, as the next getenv could overwrite it */
+            if (! default_name) {
+                default_name = savepv("C");
+            }
+
+            if (category != LC_ALL) {
+
+                /* Here we are setting a single category, look for a
+                 * corresponding environment variable */
+                for (i = 1; i < (int) categories_top_index; i++) {
+                    if (category == categories[i]) {
+                        const char * const name
+                                           = PerlEnv_getenv(category_names[i]);
+                        if (name) {
+                            locale = name;
+                            goto got_locale_name;
+                        }
+                    }
+
+                    /* None found, use the default */
+
+                    locale = default_name;
+
+                  got_locale_name: ;
+                /* XXX savepv needs to be thought through throughout this file */
+
+                }
+            }
+            else {
+                bool did_override = FALSE;
+
+                /* Here, setting LC_ALL.  Any categories that don't have a
+                 * corresponding environment variable set should be set to
+                 * LANG, or to "C" if there is no LANG.  If no individual
+                 * categories differ from this, we can just set LC_ALL.  This
+                 * is buggy on systems that have extra categories that we don't
+                 * know about.  If there is an environment variable setting the
+                 * category, we won't know to look for it, and so our use of
+                 * LANG or "C" improperly overrides it.  On the other hand, if
+                 * we don't do what is done here, and there is no environment
+                 * variable, the category's locale should be set to LANG or
+                 * "C".  So there is no good solution.  khw thinks the XXX best is
+                 * to assume that we know the complete set of categories. */
+
+
+                for (i = 1; i < (int) categories_top_index; i++) {
+                    const char * const env_override
+                                    = savepv(PerlEnv_getenv(category_names[i]));
+                    const char * this_locale = (env_override)
+                                                ? env_override
+                                                : default_name;
+
+                    /* Call this function recursively to handle this category */
+                    emulate_setlocale(categories[i], this_locale, 0, FALSE);
+                    /* XXX check return ? */
+
+                    if (strNE(this_locale, default_name)) {
+                        did_override = TRUE;
+                    }
+
+                    Safefree(env_override);
+                }
+
+                if (did_override) {
+                    Safefree(default_name);
+
+                    /* Here, LC_ALL is no longer valid, as some individual
+                     * categories don't match it.  We call ourselves
+                     * recursively, as that will execute the code that
+                     * generates the proper locale string for this situation.
+                     * We don't do the remainder of this function, as that is
+                     * to update our records, and the recursive calls just
+                     * above for the individual categories have already done
+                     * this,  and continuing on would give incorrect results,
+                     * as that code assumes that LC_ALL is a single locale, and
+                     * would change the individual ones improperly */
+                    return emulate_setlocale(LC_ALL, NULL, LC_ALL_MASK, TRUE);
+                }
+
+                /* Here, no overriding variables in the environment were found.
+                 * We can just set LC_ALL to the default */
+                locale = default_name;
+            }
+
+            Safefree(default_name);
+        }
+
+#    endif
+
+    }
+
+    /* Here, 'locale' is the return value */
+
+#    ifndef HAS_QUERYLOCALE
+
+    /* Without querylocale(), we have to update our records */
+
+    if (category == LC_ALL) {
+        int i;
+
+        /* For LC_ALL, we change all individual categories to correspond */
+                              /* PL_curlocales is a parallel array, so has same
+                               * length as 'categories' */
+        for (i = 0; i < (int) categories_top_index; i++) {
+            Safefree(PL_curlocales[i]);
+            PL_curlocales[i] = savepv(locale);
+        }
+    }
+    else {
+        int i;
+
+        /* For a single category, if it's not the same as the one in LC_ALL, we
+         * nullify LC_ALL */
+
+        if (PL_curlocales[0] && strNE(PL_curlocales[0], locale)) {
+            Safefree(PL_curlocales[0]);
+            PL_curlocales[0] = NULL;
+        }
+
+        /* Then find the category, and update its record */
+        for (i = 1; i < (int) categories_top_index; i++) {
+            if (category == categories[i]) {
+                Safefree(PL_curlocales[i]);
+                PL_curlocales[i] = savepv(locale);
+                goto done_saving_name;
+            }
+        }
+
+        Perl_croak(aTHX_ "panic: Perl doesn't know about category %d\n", category);
+
+      done_saving_name: ;
+    }
+
+#    endif
+
+    /* XXX cast? */
+    return (char *) locale;
+}
+
+/* XXX we need to tear down PL_curlocales upon process termination  to avoid leaks */
+
+#  endif
+#endif /* USE_POSIX_2008_LOCALE */
 
 STATIC void
 S_set_numeric_radix(pTHX_ const bool use_locale)
@@ -492,6 +1066,25 @@ S_new_ctype(pTHX_ const char *newctype)
                     PL_warn_locale = NULL;
                 }
             }
+#if 0
+            if (IN_LC(LC_CTYPE) || UNLIKELY(DEBUG_L_TEST)) {
+                DECLARATION_FOR_SAVE_AND_SWITCH_LOCALE;
+
+		LOCALE_LOCK;
+                SAVE_AND_SWITCH_LOCALE(LC_CTYPE, newctype, "C");
+
+                /* The '0' below suppresses a bogus gcc compiler warning */
+                Perl_warner(aTHX_ packWARN(WARN_LOCALE), SvPVX(PL_warn_locale), 0);
+
+                RESTORE_LOCALE;
+		LOCALE_UNLOCK;
+
+                if (IN_LC(LC_CTYPE)) {
+                    SvREFCNT_dec_NN(PL_warn_locale);
+                    PL_warn_locale = NULL;
+                }
+            }
+#endif
         }
     }
 
@@ -782,9 +1375,11 @@ S_win32_setlocale(pTHX_ int category, const char* locale)
         if (! locale) {
 
 #  endif
+            /* XXX this could be replaced by looping through*/
             switch (category) {
 
 #  ifdef LC_ALL
+
                 case LC_ALL:
                     override_LC_ALL = TRUE;
                     break;  /* We already know its variable isn't set */
@@ -865,6 +1460,7 @@ S_win32_setlocale(pTHX_ int category, const char* locale)
      * LANG variable or the system default if there is no LANG.  But these have
      * lower priority than the other LC_foo variables, so override it for each
      * one that is set.  (If they are set to "", it means to use the same thing
+     * Now that we know all the LC_foo on the machine, we can just loop through them XXX
      * we just set LC_ALL to, so can skip) */
 
 #  ifdef USE_LOCALE_TIME
@@ -1221,6 +1817,7 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
     const char *system_default_locale = NULL;
 
 #  endif
+
 #  ifdef DEBUGGING
 
     DEBUG_INITIALIZATION_set(cBOOL(PerlEnv_getenv("PERL_DEBUG_LOCALE_INIT")));
@@ -1240,6 +1837,14 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
 #  else
 #    define DEBUG_LOCALE_INIT(a,b,c)
 #  endif
+
+#if defined(LC_ALL_MASK) && defined(HAS_NEWLOCALE)
+    errno = 0;
+    PL_C_locale_obj = newlocale(LC_ALL_MASK, "C", NULL);
+    if (DEBUG_Lv_TEST || PerlEnv_getenv("PERL_DEBUG_LOCALE_INIT")) {
+        PerlIO_printf(Perl_debug_log, "%s:%d: created C object %p\n", __FILE__, __LINE__, PL_C_locale_obj);
+    }
+#endif
 
 #  ifndef LOCALE_ENVIRON_REQUIRED
 
@@ -1948,6 +2553,7 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
 
     /* Make sure the UTF8ness of the string and locale match */
     if (utf8 != PL_in_utf8_COLLATE_locale) {
+        /* XXX convert above Unicode to 10FFFF? */
         const char * const t = s;   /* Temporary so we can later find where the
                                        input was */
 

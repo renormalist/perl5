@@ -2718,6 +2718,10 @@ s	|char*	|stdize_locale	|NN char* locs
 s	|void	|new_collate	|NULLOK const char* newcoll
 s	|void	|new_ctype	|NN const char* newctype
 s	|void	|set_numeric_radix|const bool use_locale
+s	|char*	|emulate_setlocale  |const int category			\
+				    |NULLOK const char* locale		\
+				    |int mask				\
+				    |const bool is_mask_valid
 #ifdef WIN32
 s	|char*	|win32_setlocale|int category|NULLOK const char* locale
 #endif

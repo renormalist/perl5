@@ -561,7 +561,14 @@ PERLVAR(I, constpadix,	PADOFFSET)	/* lowest unused for constants */
 
 PERLVAR(I, padix_floor,	PADOFFSET)	/* how low may inner block reset padix */
 
+#ifdef USE_LOCALE
+
+    /* XXX need to initialize in new thread */
+PERLVARA(I, curlocales, 10, char *)
+
+#endif
 #ifdef USE_LOCALE_COLLATE
+
 PERLVAR(I, collation_name, char *)	/* Name of current collation */
 PERLVAR(I, collxfrm_base, Size_t)	/* Basic overhead in *xfrm() */
 PERLVARI(I, collxfrm_mult,Size_t, 2)	/* Expansion factor in *xfrm() */
