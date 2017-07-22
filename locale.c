@@ -128,17 +128,13 @@ S_stdize_locale(pTHX_ char *locs)
 #endif
 
 #ifdef USE_POSIX_2008_LOCALE
-/*#  define USE_THREAD_SAFE_LOCALE*/
-#endif
 
-#ifdef USE_POSIX_2008_LOCALE
+#  ifdef USE_THREAD_SAFE_LOCALE
 
-#ifdef USE_THREAD_SAFE_LOCALE
-
-#   define DECLARATION_FOR_SAVE_AND_SWITCH_LOCALE                           \
+#    define DECLARATION_FOR_SAVE_AND_SWITCH_LOCALE                           \
                                             locale_t LoCaLe_ObJeCt
 
-#   define SAVE_AND_SWITCH_LOCALE(category, old_locale, new_locale)         \
+#    define SAVE_AND_SWITCH_LOCALE(category, old_locale, new_locale)         \
         STMT_START {                                                        \
             LoCaLe_ObJeCt = newlocale(category, new_locale, NULL);          \
             if (! LoCaLe_ObJeCt) Perl_croak(aTHX_                           \
@@ -147,18 +143,18 @@ S_stdize_locale(pTHX_ char *locs)
                                "panic: uselocale failed; errno=%d", errno); \
         } STMT_END
 
-#   define RESTORE_LOCALE                                                   \
+#    define RESTORE_LOCALE                                                   \
         STMT_START {                                                        \
             if (! uselocale(LC_GLOBAL_LOCALE)) Perl_croak(aTHX_             \
                                "panic: uselocale failed; errno=%d", errno); \
             freelocale(LoCaLe_ObJeCt);                                      \
         } STMT_END
 
-#else
-#   define DECLARATION_FOR_SAVE_AND_SWITCH_LOCALE                           \
+#  else
+#    define DECLARATION_FOR_SAVE_AND_SWITCH_LOCALE                           \
         char * SaVe_LoCaLe; int CaTeGoRy
 
-#   define SAVE_AND_SWITCH_LOCALE(category, old_locale, new_locale)         \
+#    define SAVE_AND_SWITCH_LOCALE(category, old_locale, new_locale)         \
         STMT_START {                                                        \
             SaVe_LoCaLe = savepv(old_locale);                               \
             CaTeGoRy    = category;                                         \
@@ -166,22 +162,23 @@ S_stdize_locale(pTHX_ char *locs)
   "panic: setlocale(%d, %s) failed; errno=%d", category, new_locale, errno); \
         } STMT_END
 
-#   define RESTORE_LOCALE                                                   \
+#    define RESTORE_LOCALE                                                   \
         STMT_START {                                                        \
             if (! setlocale(CaTeGoRy, SaVe_LoCaLe)) Perl_croak(aTHX_        \
  "panic: setlocale(%d, %s) failed; errno=%d", CaTeGoRy, SaVe_LoCaLe, errno); \
             Safefree(SaVe_LoCaLe);                                          \
         } STMT_END
 
+#  endif
 #endif
 
 
 #ifndef USE_POSIX_2008_LOCALE
 
 #  ifdef WIN32
-#   define do_setlocale_c(cat, locale) win32_setlocale(cat, locale)
+#    define do_setlocale_c(cat, locale) win32_setlocale(cat, locale)
 #  else
-#   define do_setlocale_c(cat, locale) setlocale(cat, locale)
+#    define do_setlocale_c(cat, locale) setlocale(cat, locale)
 #  endif
 
 #  define do_setlocale_r(cat, locale) do_setlocale_c(cat, locale)
@@ -226,6 +223,8 @@ const int category_mask[] = { LC_ALL,      LC_ALL_MASK,
                                the definitions above */
                     };
 
+const Size_t category_mask_top_index = C_ARRAY_LENGTH(category_mask) - 2;
+
 #  ifndef HAS_QUERYLOCALE
 
 const int categories[] = { LC_ALL,
@@ -264,6 +263,9 @@ const int categories[] = { LC_ALL,
                      -1  /* Just so we don't have to worry about commas in the
                             definitions above */
                 };
+    /* -2 because don't look at the final, -1, element */
+    const Size_t categories_top_index    = C_ARRAY_LENGTH(categories) - 2;
+    /* XXX maybe should assert are same, use just one.  See what happens if they are off. */
 
 const char * category_names[] = { "LC_ALL",
                                   "LC_NUMERIC",
@@ -347,10 +349,6 @@ S_emulate_setlocale(pTHX_
     locale_t new_obj;
 
 
-    /* -2 because don't look at the final, -1, element */
-    const Size_t categories_top_index    = C_ARRAY_LENGTH(categories) - 2;
-    const Size_t category_mask_top_index = C_ARRAY_LENGTH(category_mask) - 2;
-    /* XXX maybe should assert are same, use just one.  See what happens if they are off. */
 
     if (DEBUG_L_TEST || debug_initialization) {
         PerlIO_printf(Perl_debug_log, "%s:%d: emulate_setlocale input=%d, %s, %d, %d\n", __FILE__, __LINE__, category, locale, mask, is_mask_valid);
@@ -401,7 +399,7 @@ S_emulate_setlocale(pTHX_
 
 #  ifdef HAS_QUERYLOCALE
 
-        return querylocale(cur_obj);
+        return (char *) querylocale(mask, cur_obj);
 
 /*#elif defined(_NL_LOCALE_NAME)
 
@@ -521,15 +519,15 @@ S_emulate_setlocale(pTHX_
 
     if (strEQ(locale, "")) {    /* Get the values from the environment */
 
-#    ifdef HAS_QUERYLOCALE
+#  ifdef HAS_QUERYLOCALE
 
-        locale = querylocale(new_obj);
+        locale = querylocale(mask, new_obj);
 
 /*#elif defined(_NL_LOCALE_NAME)
 
         locale = nl_langinfo(_NL_LOCALE_NAME(category))
 */
-#    else
+#  else
 
         const char * const lc_all = PerlEnv_getenv("LC_ALL");
 
@@ -631,13 +629,13 @@ S_emulate_setlocale(pTHX_
             Safefree(default_name);
         }
 
-#    endif
+#  endif
 
     }
 
     /* Here, 'locale' is the return value */
 
-#    ifndef HAS_QUERYLOCALE
+#  ifndef HAS_QUERYLOCALE
 
     /* Without querylocale(), we have to update our records */
 
@@ -677,7 +675,7 @@ S_emulate_setlocale(pTHX_
       done_saving_name: ;
     }
 
-#    endif
+#  endif
 
     /* XXX cast? */
     return (char *) locale;
@@ -685,7 +683,6 @@ S_emulate_setlocale(pTHX_
 
 /* XXX we need to tear down PL_curlocales upon process termination  to avoid leaks */
 
-#  endif
 #endif /* USE_POSIX_2008_LOCALE */
 
 STATIC void
